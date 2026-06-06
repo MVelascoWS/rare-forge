@@ -11,7 +11,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 // POST /api/works/:id — open a bounty within this work
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const { title, role, rewardEth, revenuePercent } = body ?? {};
+  const { title, role, rewardEth, revenuePercent, instructions, deliverableSpecs, referencePath } =
+    body ?? {};
   if (!title || !role || rewardEth == null) {
     return NextResponse.json({ error: "title, role, rewardEth are required" }, { status: 400 });
   }
@@ -21,6 +22,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     role,
     rewardEth: Number(rewardEth),
     revenuePercent: revenuePercent != null ? Number(revenuePercent) : undefined,
+    instructions: instructions || undefined,
+    deliverableSpecs: deliverableSpecs || undefined,
+    referencePath: referencePath || undefined,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
   return NextResponse.json({ bounty: result.data });

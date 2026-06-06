@@ -5,11 +5,13 @@ import Link from "next/link";
 import type { Work, Bounty, Sale } from "@/lib/supabase";
 import { apiGet, apiPost } from "@/lib/api";
 import { useIdentity, truncateAddress } from "@/lib/use-identity";
+import { buildRoyaltyRows } from "@/lib/split-preview";
 import { RequireWallet } from "@/components/require-wallet";
 import { Metric } from "@/components/metric";
 import { Spinner } from "@/components/spinner";
 import { PendingButton } from "@/components/pending-button";
-import { TxLink, Amount } from "@/components/data";
+import { TxLink, Amount, Address } from "@/components/data";
+import { RoyaltyTable } from "@/components/royalty-table";
 
 type Board = { work: Work; bounties: Bounty[] };
 
@@ -108,6 +110,11 @@ function StoreInner({ workId }: { workId: string }) {
             <span className="pill bg-verified-subtle text-verified">release live</span>
             <span className="rf-data">{price} ETH</span> per copy
           </p>
+          {work.work_contract && (
+            <div className="mt-1 text-xs text-t4">
+              work contract <Address value={work.work_contract} link />
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <PendingButton
@@ -127,6 +134,21 @@ function StoreInner({ workId }: { workId: string }) {
         <Metric label="Copies sold" value={copiesSold} />
         <Metric label="Total revenue" value={`${totalRevenue.toFixed(4)} ETH`} />
         <Metric label="Paid to creators" value={`~${paidToCreators.toFixed(4)} ETH`} />
+      </div>
+
+      {/* Royalty recipients — every sale pays this split (verifiable on-chain). */}
+      <div className="card mb-6">
+        <h2 className="rf-eyebrow mb-3">Royalty recipients · every sale</h2>
+        <RoyaltyTable
+          rows={buildRoyaltyRows(
+            work.requester_addr,
+            bounties
+              .filter(
+                (b) => b.status === "minted" && b.claimed_by && (b.revenue_percent ?? 0) > 0
+              )
+              .map((b) => ({ address: b.claimed_by!, role: b.role, percent: b.revenue_percent! }))
+          )}
+        />
       </div>
 
       {/* External sale bridge */}

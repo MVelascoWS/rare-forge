@@ -3,6 +3,8 @@ const BASE = "https://sepolia.etherscan.io";
 
 export const txUrl = (hash: string) => `${BASE}/tx/${hash}`;
 export const addressUrl = (addr: string) => `${BASE}/address/${addr}`;
+export const nftUrl = (contract: string, tokenId: string) =>
+  `${BASE}/nft/${contract}/${tokenId}`;
 
 /** Turn an ipfs:// ref into an HTTP gateway URL for <img> display. */
 export function ipfsToHttp(ref: string | null | undefined): string | null {

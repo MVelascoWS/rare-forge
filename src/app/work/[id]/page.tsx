@@ -3,15 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Work, Bounty } from "@/lib/supabase";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiUpload } from "@/lib/api";
 import { useIdentity, truncateAddress } from "@/lib/use-identity";
-import { ipfsToHttp } from "@/lib/explorer";
+import { buildRoyaltyRows } from "@/lib/split-preview";
+import { servedUrl, isImagePath, fileTypeLabel } from "@/lib/files";
 import { RequireWallet } from "@/components/require-wallet";
 import { WorkStatusPill, BountyStatusPill } from "@/components/status-pill";
 import { Metric } from "@/components/metric";
 import { Address, TxLink } from "@/components/data";
+import { RoyaltyTable } from "@/components/royalty-table";
+import { AssetThumb } from "@/components/asset-thumb";
+import { AssetPreview } from "@/components/asset-preview";
+import { Select } from "@/components/select";
+import { FileInput } from "@/components/file-input";
 import { Modal } from "@/components/modal";
 import { Spinner } from "@/components/spinner";
+import { TxPending } from "@/components/tx-pending";
 
 type Board = { work: Work; bounties: Bounty[] };
 
@@ -74,6 +81,14 @@ function BoardInner({ workId }: { workId: string }) {
   const totalAssigned = bounties.reduce((s, b) => s + (b.revenue_percent ?? 0), 0);
   const canSeal = work.status === "open" && mintedCount >= 1;
 
+  // Royalty recipients (sealed work): principal + minted participants + fee.
+  const royaltyRows = buildRoyaltyRows(
+    work.requester_addr,
+    bounties
+      .filter((b) => b.status === "minted" && b.claimed_by && (b.revenue_percent ?? 0) > 0)
+      .map((b) => ({ address: b.claimed_by!, role: b.role, percent: b.revenue_percent! }))
+  );
+
   return (
     <div>
       <Link href="/works" className="text-sm text-t3 hover:text-t1">
@@ -88,11 +103,18 @@ function BoardInner({ workId }: { workId: string }) {
             <WorkStatusPill status={work.status} />
           </div>
           <p className="mt-1 text-sm text-t3">{work.description || "Video game"}</p>
-          {work.asset_contract && (
-            <div className="mt-2 text-xs text-t4">
-              asset contract <Address value={work.asset_contract} link />
-            </div>
-          )}
+          <div className="mt-2 space-y-0.5 text-xs text-t4">
+            {work.asset_contract && (
+              <div>
+                asset contract <Address value={work.asset_contract} link />
+              </div>
+            )}
+            {work.status === "sealed" && work.work_contract && (
+              <div>
+                work contract <Address value={work.work_contract} link />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -128,6 +150,14 @@ function BoardInner({ workId }: { workId: string }) {
         <Metric label="Minted" value={mintedCount} />
         <Metric label="% assigned" value={`${totalAssigned}%`} />
       </div>
+
+      {/* Royalty recipients (transparency) — every sale pays this split. */}
+      {work.status === "sealed" && (
+        <div className="card mb-6">
+          <h2 className="rf-eyebrow mb-3">Royalty recipients · every sale</h2>
+          <RoyaltyTable rows={royaltyRows} />
+        </div>
+      )}
 
       {/* Bounty list */}
       {bounties.length === 0 ? (
@@ -191,23 +221,29 @@ function BountyRow({
   onReview: () => void;
 }) {
   const b = bounty;
+  const hasAsset =
+    (b.status === "delivered" || b.status === "approved" || b.status === "minted") &&
+    !!b.delivery_path;
 
   return (
     <div className="card flex items-center justify-between gap-4 py-3">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-t1">{b.title}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-t3">
-          <span>{b.role}</span>
-          <span className="text-t4">·</span>
-          <span className="rf-data">{b.reward_eth} ETH</span>
-          <span className="text-t4">·</span>
-          {b.revenue_percent != null ? (
-            <span>
-              <span className="rf-data">{b.revenue_percent}%</span> of work
-            </span>
-          ) : (
-            <span className="text-t4">not assigned yet</span>
-          )}
+      <div className="flex min-w-0 items-center gap-3">
+        {hasAsset && <AssetThumb path={b.delivery_path} />}
+        <div className="min-w-0">
+          <div className="truncate font-medium text-t1">{b.title}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-t3">
+            <span>{b.role}</span>
+            <span className="text-t4">·</span>
+            <span className="rf-data">{b.reward_eth} ETH</span>
+            <span className="text-t4">·</span>
+            {b.revenue_percent != null ? (
+              <span>
+                <span className="rf-data">{b.revenue_percent}%</span> of work
+              </span>
+            ) : (
+              <span className="text-t4">not assigned yet</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -262,6 +298,9 @@ function OpenBountyModal({
   const [role, setRole] = useState(ROLES[0]);
   const [rewardEth, setRewardEth] = useState("0.001");
   const [revenuePercent, setRevenuePercent] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [deliverableSpecs, setDeliverableSpecs] = useState("");
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -271,14 +310,24 @@ function OpenBountyModal({
     setSubmitting(true);
     setError(null);
     try {
+      let referencePath: string | undefined;
+      if (referenceFile) {
+        referencePath = (await apiUpload(referenceFile)).path;
+      }
       await apiPost(`/api/works/${workId}`, {
         title: title.trim(),
         role,
         rewardEth: Number(rewardEth),
         revenuePercent: revenuePercent === "" ? undefined : Number(revenuePercent),
+        instructions: instructions.trim() || undefined,
+        deliverableSpecs: deliverableSpecs.trim() || undefined,
+        referencePath,
       });
       setTitle("");
       setRevenuePercent("");
+      setInstructions("");
+      setDeliverableSpecs("");
+      setReferenceFile(null);
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to open bounty");
@@ -305,9 +354,8 @@ function OpenBountyModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label" htmlFor="b-role">Role</label>
-            <select
+            <Select
               id="b-role"
-              className="input"
               value={role}
               onChange={(e) => setRole(e.target.value)}
               disabled={submitting}
@@ -315,7 +363,7 @@ function OpenBountyModal({
               {ROLES.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label" htmlFor="b-reward">Reward (ETH)</label>
@@ -348,6 +396,46 @@ function OpenBountyModal({
           />
         </div>
 
+        <div>
+          <label className="label" htmlFor="b-instr">
+            Instructions <span className="font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="b-instr"
+            className="input min-h-[70px] resize-y"
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder="What should the artist make? Style, references, scope…"
+            disabled={submitting}
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="b-specs">
+            Deliverable specs <span className="font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="b-specs"
+            className="input min-h-[60px] resize-y"
+            value={deliverableSpecs}
+            onChange={(e) => setDeliverableSpecs(e.target.value)}
+            placeholder="e.g. 2048px PNG, transparent bg · or FBX, < 50k tris, PBR"
+            disabled={submitting}
+          />
+        </div>
+
+        <div>
+          <label className="label">
+            Reference file <span className="font-normal">(optional)</span>
+          </label>
+          <FileInput
+            accept="*"
+            disabled={submitting}
+            onChange={setReferenceFile}
+            label="Choose reference"
+          />
+        </div>
+
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="flex justify-end gap-2">
@@ -376,7 +464,12 @@ function ReviewModal({
 }) {
   const [busy, setBusy] = useState<null | "approve" | "changes">(null);
   const [error, setError] = useState<string | null>(null);
-  const img = ipfsToHttp(bounty.delivery_ipfs);
+
+  // The minted media is delivery_path (always an image). delivery_ipfs may hold
+  // the served URL of the real deliverable (e.g. an FBX/audio file) for download.
+  const mediaUrl = servedUrl(bounty.delivery_path);
+  const assetUrl = servedUrl(bounty.delivery_ipfs) ?? mediaUrl;
+  const assetIsImage = isImagePath(bounty.delivery_ipfs ?? bounty.delivery_path);
 
   async function approve() {
     if (busy) return;
@@ -411,43 +504,53 @@ function ReviewModal({
   return (
     <Modal open onClose={busy ? () => {} : onClose} title="Review delivery">
       <div className="space-y-4">
-        <div className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-surface-inset">
-          {img ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={img} alt={bounty.title} className="max-h-60 w-full object-contain" />
-          ) : (
-            <div className="flex h-40 flex-col items-center justify-center text-center text-xs text-t4">
-              <span className="text-2xl">🖼️</span>
-              <span className="rf-data mt-2">{bounty.delivery_path ?? "No preview available"}</span>
-            </div>
-          )}
-        </div>
+        <AssetPreview path={bounty.delivery_path} alt={bounty.title} className="h-60 w-full" />
 
         <dl className="space-y-1 text-sm">
           <Row k="Title" v={bounty.title} />
           <Row k="Role" v={bounty.role} />
           <Row k="Creator" v={truncateAddress(bounty.claimed_by)} mono />
+          {!assetIsImage && bounty.delivery_ipfs && (
+            <Row k="Asset type" v={fileTypeLabel(bounty.delivery_ipfs)} mono />
+          )}
         </dl>
 
-        <div className="rounded-md border border-[color:var(--border-subtle)] bg-surface-raised p-3 text-xs text-t3">
-          Approving mints the asset to the creator (set as on-chain royalty
-          receiver) on Sepolia. This takes ~10–30s.
-        </div>
-
-        {error && <p className="text-sm text-danger">{error}</p>}
-
-        <div className="flex justify-end gap-2">
-          <button
-            className="btn-ghost"
-            onClick={requestChanges}
-            disabled={busy !== null}
+        {assetUrl && (
+          <a
+            href={assetUrl}
+            download
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-sm text-info hover:underline"
           >
-            {busy === "changes" ? <><Spinner /> …</> : "Request changes"}
-          </button>
-          <button className="btn-primary" onClick={approve} disabled={busy !== null}>
-            {busy === "approve" ? <><Spinner /> Minting asset…</> : "Approve & mint"}
-          </button>
-        </div>
+            ↓ Download delivered asset
+          </a>
+        )}
+
+        {busy === "approve" ? (
+          <TxPending
+            title="Minting asset to creator…"
+            steps={["On-chain transaction on Sepolia — ~10–30s"]}
+          />
+        ) : (
+          <>
+            <div className="rounded-md border border-[color:var(--border-subtle)] bg-surface-raised p-3 text-xs text-t3">
+              Approving mints the asset to the creator (set as on-chain royalty
+              receiver) on Sepolia. This takes ~10–30s.
+            </div>
+
+            {error && <p className="text-sm text-danger">{error}</p>}
+
+            <div className="flex justify-end gap-2">
+              <button className="btn-ghost" onClick={requestChanges} disabled={busy !== null}>
+                {busy === "changes" ? <><Spinner /> …</> : "Request changes"}
+              </button>
+              <button className="btn-primary" onClick={approve} disabled={busy !== null}>
+                Approve &amp; mint
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );

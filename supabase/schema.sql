@@ -28,6 +28,9 @@ create table bounties (
   role            text not null,                 -- concept_artist | modeler | animator | musician ...
   reward_eth      numeric not null,
   revenue_percent int,                            -- % of the work granted to this participant
+  instructions      text,                          -- producer's brief for the asset
+  deliverable_specs text,                          -- required formats / specs (e.g. "1024px PNG")
+  reference_path    text,                          -- optional local reference file (served via /api/files)
   status          text not null default 'open'
                   check (status in ('open','claimed','delivered','approved','minted')),
   claimed_by      text,                           -- creator wallet (human or agent)

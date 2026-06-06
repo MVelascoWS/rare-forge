@@ -58,6 +58,9 @@ export type Bounty = {
   role: string;
   reward_eth: number;
   revenue_percent: number | null;
+  instructions: string | null;
+  deliverable_specs: string | null;
+  reference_path: string | null;
   status: BountyStatus;
   claimed_by: string | null;
   claimed_by_kind: ClaimedByKind;

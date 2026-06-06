@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { txUrl, addressUrl } from "@/lib/explorer";
+import { txUrl, addressUrl, nftUrl } from "@/lib/explorer";
 import { truncateAddress } from "@/lib/use-identity";
 
 /**
@@ -42,6 +42,28 @@ export function TxLink({ hash, children }: { hash: string; children?: ReactNode 
       className="rf-data text-info transition-colors hover:underline"
     >
       {children ?? "tx ↗"}
+    </a>
+  );
+}
+
+/** Etherscan NFT link (contract + token id) in mono. */
+export function NftLink({
+  contract,
+  tokenId,
+  children,
+}: {
+  contract: string;
+  tokenId: string;
+  children?: ReactNode;
+}) {
+  return (
+    <a
+      href={nftUrl(contract, tokenId)}
+      target="_blank"
+      rel="noreferrer"
+      className="rf-data text-info transition-colors hover:underline"
+    >
+      {children ?? "NFT ↗"}
     </a>
   );
 }

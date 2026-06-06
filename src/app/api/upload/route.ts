@@ -21,7 +21,7 @@ import path from "node:path";
 export const runtime = "nodejs";
 
 const UPLOAD_DIR = "uploads"; // relative to process.cwd()
-const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — game-dev assets can be large
 
 export async function POST(req: NextRequest) {
   let form: FormData;
@@ -48,12 +48,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json(
-      { error: `Only image uploads are allowed (got "${file.type || "unknown"}")` },
-      { status: 400 }
-    );
-  }
+
+  // Any file type is accepted (#3): images become NFT media directly; other
+  // assets (FBX, audio, …) are stored + served, with an image used for the mint.
 
   // Sanitize the original name to a safe basename; prefix a uuid for uniqueness.
   const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -74,7 +71,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Return the relative path — this is what callers pass as deliveryPath /
-  // imagePath to the bounty-deliver and work-seal endpoints.
-  return NextResponse.json({ path: relPath });
+  // `path` (disk, relative) is what callers pass as deliveryPath / imagePath to
+  // the backend (rare --image). `url` is what the browser uses to preview /
+  // download the file (served by /api/files).
+  return NextResponse.json({
+    path: relPath,
+    url: `/api/files/${fileName}`,
+    filename: safeName,
+    contentType: file.type || "application/octet-stream",
+    isImage: file.type.startsWith("image/"),
+  });
 }

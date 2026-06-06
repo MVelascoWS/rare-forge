@@ -5,14 +5,18 @@ import Link from "next/link";
 import type { Work, Bounty } from "@/lib/supabase";
 import type { FeeMode } from "@/lib/supabase";
 import { apiGet, apiPost, apiUpload } from "@/lib/api";
-import { useIdentity, truncateAddress } from "@/lib/use-identity";
+import { useIdentity } from "@/lib/use-identity";
 import {
   computeSplitPreview,
   RARE_FORGE_FEE_PERCENT,
+  type RoyaltyRow,
 } from "@/lib/split-preview";
 import { RequireWallet } from "@/components/require-wallet";
+import { RoyaltyTable } from "@/components/royalty-table";
 import { Spinner } from "@/components/spinner";
 import { TxPending } from "@/components/tx-pending";
+import { Select } from "@/components/select";
+import { FileInput } from "@/components/file-input";
 
 type Board = { work: Work; bounties: Bounty[] };
 type BreakdownRow = {
@@ -20,14 +24,6 @@ type BreakdownRow = {
   role: string;
   percentOfWork: number;
   onchainRatio: number;
-};
-
-type SplitRowView = {
-  label: string;
-  percentOfWork: number;
-  ratio: number | null;
-  tint?: "info";
-  dim?: boolean;
 };
 
 const SEAL_STEPS = [
@@ -147,15 +143,11 @@ function SealInner({ workId }: { workId: string }) {
 
   // Success state: show the authoritative on-chain breakdown returned by the API.
   if (result) {
-    const rows: SplitRowView[] = result.map((r) => ({
-      label:
-        r.role === "principal"
-          ? "Principal (You)"
-          : r.role === "rare_forge_fee"
-          ? "Rare Forge (protocol fee)"
-          : `${r.role} · ${truncateAddress(r.address)}`,
-      percentOfWork: r.percentOfWork,
+    const rows: RoyaltyRow[] = result.map((r) => ({
+      role: r.role,
+      address: r.role === "rare_forge_fee" ? "" : r.address,
       ratio: r.onchainRatio,
+      assigned: r.percentOfWork,
       tint: r.role === "rare_forge_fee" ? "info" : undefined,
     }));
     return (
@@ -168,7 +160,7 @@ function SealInner({ workId }: { workId: string }) {
         </p>
         <div className="card mt-6 shadow-glow-prism">
           <SplitPanelHeader />
-          <SplitTable rows={rows} total={result.reduce((s, r) => s + r.onchainRatio, 0)} />
+          <RoyaltyTable rows={rows} />
         </div>
         <Link href={`/work/${work.id}/store`} className="btn-primary mt-6 shadow-glow-accent">
           Go to store ↗
@@ -177,21 +169,23 @@ function SealInner({ workId }: { workId: string }) {
     );
   }
 
-  const previewRows: SplitRowView[] = [
+  const previewRows: RoyaltyRow[] = [
     {
-      label: "Principal (You)",
-      percentOfWork: preview.principalPercent,
+      role: "principal",
+      address: work.requester_addr,
       ratio: preview.principalRatio,
+      assigned: preview.principalPercent,
     },
     ...assigned.map((b) => ({
-      label: `${b.role} · ${truncateAddress(b.claimed_by)}`,
-      percentOfWork: b.revenue_percent ?? 0,
+      role: b.role,
+      address: b.claimed_by ?? "",
       ratio: ratioByBounty.has(b.id) ? ratioByBounty.get(b.id)! : null,
+      assigned: b.revenue_percent ?? 0,
       dim: !ratioByBounty.has(b.id),
     })),
     {
-      label: "Rare Forge (protocol fee)",
-      percentOfWork: preview.feePercent,
+      role: "rare_forge_fee",
+      address: "",
       ratio: preview.feePercent,
       tint: "info" as const,
     },
@@ -227,16 +221,15 @@ function SealInner({ workId }: { workId: string }) {
 
           <div>
             <label className="label" htmlFor="fee">Who absorbs the 3% fee?</label>
-            <select
+            <Select
               id="fee"
-              className="input"
               value={feeMode}
               onChange={(e) => setFeeMode(e.target.value as FeeMode)}
               disabled={sealing}
             >
               <option value="absorb">Creator (absorb) — fee comes out of price</option>
               <option value="passthrough">Buyer (passthrough) — price grossed up</option>
-            </select>
+            </Select>
             <p className="mt-1 text-xs text-t3">
               {feeMode === "passthrough"
                 ? <>Buyer pays ~<span className="rf-data">{grossPrice} ETH</span>; creators keep their full share.</>
@@ -245,14 +238,12 @@ function SealInner({ workId }: { workId: string }) {
           </div>
 
           <div>
-            <label className="label" htmlFor="cover">Work cover image</label>
-            <input
-              id="cover"
-              className="input file:mr-3 file:rounded file:border-0 file:bg-surface-raised file:px-3 file:py-1 file:text-t1"
-              type="file"
+            <label className="label">Work cover image</label>
+            <FileInput
               accept="image/*"
-              onChange={(e) => setCover(e.target.files?.[0] ?? null)}
               disabled={sealing}
+              onChange={setCover}
+              label="Choose cover image"
             />
           </div>
         </div>
@@ -260,7 +251,7 @@ function SealInner({ workId }: { workId: string }) {
         {/* Split preview — the prism moment: one payment refracted into shares. */}
         <div className="card shadow-glow-prism">
           <SplitPanelHeader />
-          <SplitTable rows={previewRows} total={preview.total} />
+          <RoyaltyTable rows={previewRows} />
           <p className="mt-3 text-xs text-t4">
             Only participants with a minted asset enter the split. Percentages are
             rounded to integers; remainder goes to the principal.
@@ -299,48 +290,3 @@ function SplitPanelHeader() {
   );
 }
 
-function SplitTable({
-  rows,
-  total,
-}: {
-  rows: SplitRowView[];
-  total: number;
-}) {
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="rf-eyebrow text-left">
-          <th className="pb-2">Recipient</th>
-          <th className="pb-2 text-right">% of work</th>
-          <th className="pb-2 text-right">On-chain</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i} className="border-t border-[color:var(--border-subtle)]">
-            <td
-              className={`py-2 ${
-                r.tint === "info" ? "text-info" : r.dim ? "text-t4" : "text-t2"
-              }`}
-            >
-              {r.label}
-            </td>
-            <td className="rf-data py-2 text-right text-t3">{r.percentOfWork}%</td>
-            <td
-              className={`rf-data py-2 text-right ${r.dim ? "text-t4" : "text-t1"}`}
-            >
-              {r.ratio === null ? "—" : `${r.ratio}%`}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr className="border-t border-[color:var(--border-strong)] font-semibold">
-          <td className="py-2 text-t1">Total</td>
-          <td />
-          <td className="rf-data py-2 text-right text-t1">{total}%</td>
-        </tr>
-      </tfoot>
-    </table>
-  );
-}

@@ -21,6 +21,41 @@ export type SplitPreview = {
   total: number; // always 100
 };
 
+/**
+ * A royalty recipient row for display: who receives what % of every sale.
+ * `ratio` is the on-chain %, or null when the recipient isn't in the split yet
+ * (e.g. a participant with no minted asset). `assigned` is the % of the work the
+ * producer granted, used to hint when rounding moved the on-chain value.
+ */
+export type RoyaltyRow = {
+  role: string;
+  address: string;
+  ratio: number | null;
+  assigned?: number;
+  tint?: "info";
+  dim?: boolean;
+};
+
+/**
+ * Rebuild the on-chain royalty recipients (principal + minted participants +
+ * 3% Rare Forge fee) for a sealed work, same rule as buildRevenueSplit. The fee
+ * wallet address isn't known client-side, so its row carries no address.
+ */
+export function buildRoyaltyRows(
+  principalAddress: string,
+  participants: { address: string; role: string; percent: number }[]
+): RoyaltyRow[] {
+  const preview = computeSplitPreview(participants.map((p) => p.percent));
+  const rows: RoyaltyRow[] = [
+    { role: "principal", address: principalAddress, ratio: preview.principalRatio },
+  ];
+  participants.forEach((p, i) =>
+    rows.push({ role: p.role, address: p.address, ratio: preview.participantRatios[i] })
+  );
+  rows.push({ role: "rare_forge_fee", address: "", ratio: preview.feePercent, tint: "info" });
+  return rows;
+}
+
 export function computeSplitPreview(
   participantPercents: number[],
   feePercent: number = RARE_FORGE_FEE_PERCENT
@@ -32,11 +67,14 @@ export function computeSplitPreview(
   const creatorSide = [principalPercent, ...participantPercents];
   const creatorPot = 100 - feePercent;
 
-  const raw = creatorSide.map((p) => (p / 100) * creatorPot);
-  const floored = raw.map((r) => Math.floor(r));
-  const remainder = creatorPot - floored.reduce((s, x) => s + x, 0);
-  const ratios = [...floored];
-  ratios[0] += remainder; // all rounding remainder to the principal
+  const ratios = creatorSide.map((p) => Math.floor((p / 100) * creatorPot));
+  // Min 1% for any participant with a positive share (mirror buildRevenueSplit).
+  for (let i = 1; i < ratios.length; i++) {
+    if (participantPercents[i - 1] > 0 && ratios[i] === 0) ratios[i] = 1;
+  }
+  // Principal keeps the remainder of the pot.
+  const participantsUsed = ratios.slice(1).reduce((s, x) => s + x, 0);
+  ratios[0] = creatorPot - participantsUsed;
 
   return {
     principalPercent,

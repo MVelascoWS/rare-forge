@@ -7,10 +7,44 @@
  * logic in the backend (FRONTEND_SPEC: "call the existing /api/* routes").
  */
 
+/**
+ * rare-cli surfaces failures as a raw JSON blob ({ error, message, details,
+ * causes, ... }). Turn that into one human-readable sentence for the UI, and
+ * map common on-chain failures to plain language. Presentation only — the full
+ * error is still logged by the backend.
+ */
+export function cleanError(message: string): string {
+  let prefix = "";
+  let core = message;
+
+  // If a rare-cli JSON object is embedded, lift its `message` field.
+  const braceIdx = message.indexOf("{");
+  if (braceIdx !== -1) {
+    try {
+      const obj = JSON.parse(message.slice(braceIdx)) as { message?: unknown };
+      if (typeof obj.message === "string") {
+        prefix = message.slice(0, braceIdx).trim();
+        core = obj.message;
+      }
+    } catch {
+      /* not JSON — keep the original text */
+    }
+  }
+
+  if (/exceeds the balance|insufficient funds/i.test(core)) {
+    core =
+      "Insufficient funds — the signer wallet doesn't have enough Sepolia ETH for the price plus gas.";
+  } else {
+    core = core.split("\n")[0].trim();
+  }
+
+  return prefix ? `${prefix} ${core}` : core;
+}
+
 async function parse<T>(res: Response): Promise<T> {
   const json = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
-    throw new Error(json?.error ?? `Request failed (${res.status})`);
+    throw new Error(cleanError(json?.error ?? `Request failed (${res.status})`));
   }
   return json as T;
 }
@@ -29,11 +63,19 @@ export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
   );
 }
 
-/** Upload one image to /api/upload, returning the server path for rare-cli. */
-export async function apiUpload(file: File): Promise<{ path: string }> {
+export type UploadResult = {
+  path: string; // disk path for the backend (rare --image)
+  url: string; // browser URL (served by /api/files)
+  filename: string;
+  contentType: string;
+  isImage: boolean;
+};
+
+/** Upload one file to /api/upload, returning its disk path + served URL. */
+export async function apiUpload(file: File): Promise<UploadResult> {
   const fd = new FormData();
   fd.append("file", file);
-  return parse<{ path: string }>(
+  return parse<UploadResult>(
     await fetch("/api/upload", { method: "POST", body: fd })
   );
 }

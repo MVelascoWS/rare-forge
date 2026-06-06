@@ -328,11 +328,22 @@ export function buildRevenueSplit(opts: {
   // Insert the fee underneath: scale the creator side into the (100 - fee)% pot.
   const creatorPot = 100 - feePercent;
   const raw = creatorSide.map((c) => (c.percentOfWork / 100) * creatorPot);
-  const floored = raw.map((r) => Math.floor(r));
-  const remainder = creatorPot - floored.reduce((s, x) => s + x, 0);
-  const ratios = [...floored];
-  // Give all rounding remainder to the principal (index 0).
-  ratios[0] += remainder;
+  const ratios = raw.map((r) => Math.floor(r));
+  // A participant with a small share (e.g. 1% of the work) scales below 1 and
+  // floors to 0. The CLI rejects a 0 ratio, and a contributor shouldn't silently
+  // earn nothing — so any creator with a positive assigned share gets at least 1%.
+  for (let i = 1; i < ratios.length; i++) {
+    if (creatorSide[i].percentOfWork > 0 && ratios[i] === 0) ratios[i] = 1;
+  }
+  // The principal keeps whatever remains: creatorPot minus the participants'
+  // ratios (this also absorbs rounding, as before).
+  const participantsUsed = ratios.slice(1).reduce((s, x) => s + x, 0);
+  ratios[0] = creatorPot - participantsUsed;
+  if (ratios[0] < 0) {
+    throw new Error(
+      "Too many sub-1% participant shares to seal — increase shares or reduce participants."
+    );
+  }
 
   const splitsByRole: SplitEntry[] = creatorSide.map((c, i) => ({
     address: c.address,
@@ -364,10 +375,11 @@ export function buildRevenueSplit(opts: {
     const key = s.address.toLowerCase();
     if (!casing.has(key)) casing.set(key, s.address);
   }
-  const splits: SplitEntry[] = [...consolidated.entries()].map(([key, ratio]) => ({
-    address: casing.get(key)!,
-    ratio,
-  }));
+  const splits: SplitEntry[] = [...consolidated.entries()]
+    .map(([key, ratio]) => ({ address: casing.get(key)!, ratio }))
+    // Drop any 0-ratio entry (e.g. a principal who assigned 100% to others) —
+    // the CLI requires every split ratio to be between 1 and 100.
+    .filter((s) => s.ratio > 0);
 
   // Sanity: ratios must be integers summing to exactly 100.
   const sum = splits.reduce((s, x) => s + x.ratio, 0);

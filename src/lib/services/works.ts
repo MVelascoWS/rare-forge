@@ -57,17 +57,27 @@ export async function openBounty(opts: {
   role: string;
   rewardEth: number;
   revenuePercent?: number;
+  instructions?: string;
+  deliverableSpecs?: string;
+  referencePath?: string;
 }): Promise<ServiceResult<Bounty>> {
+  const insert: Record<string, unknown> = {
+    work_id: opts.workId,
+    title: opts.title,
+    role: opts.role,
+    reward_eth: opts.rewardEth,
+    revenue_percent: opts.revenuePercent ?? null,
+    status: "open",
+  };
+  // Only reference the brief columns when a value is provided, so opening a
+  // bounty without a brief keeps working before the migration is applied.
+  if (opts.instructions !== undefined) insert.instructions = opts.instructions;
+  if (opts.deliverableSpecs !== undefined) insert.deliverable_specs = opts.deliverableSpecs;
+  if (opts.referencePath !== undefined) insert.reference_path = opts.referencePath;
+
   const { data, error } = await supabase
     .from("bounties")
-    .insert({
-      work_id: opts.workId,
-      title: opts.title,
-      role: opts.role,
-      reward_eth: opts.rewardEth,
-      revenue_percent: opts.revenuePercent ?? null,
-      status: "open",
-    })
+    .insert(insert)
     .select()
     .single();
   if (error) return { ok: false, error: error.message };
