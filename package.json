@@ -1,0 +1,24 @@
+{
+  "name": "rare-forge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rare Forge — collaborative creative production pipeline with fair on-chain royalties — Rare Protocol x ETHMexico",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "rare:setup": "rare configure --chain sepolia --chain-id 11155111 --private-key $RARE_PRIVATE_KEY --rpc-url $SEPOLIA_RPC_URL"
+  },
+  "dependencies": {
+    "@rareprotocol/rare-cli": "^1.2.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}
