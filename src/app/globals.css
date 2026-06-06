@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+/* Body canvas, base type, and h1–h4 serif defaults come from the design system
+   (src/styles/design-system/tokens/base.css), imported after this file in the
+   root layout so it wins over Tailwind's preflight. */
+@layer base {
+  a {
+    @apply transition-colors;
+  }
+}
+
+/* Respect reduced-motion for Tailwind's own transitions too (the design-system
+   motion.css only zeroes its --dur tokens). Functional animations like the
+   pending spinner keep running. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Shared building blocks, mapped to the Rare Forge design system (DESIGN_SPEC).
+ * Components compose these so the look stays consistent. Tokens only — no hex.
+ */
+@layer components {
+  /* Card — sits on --surface-card, hairline border, ambient depth + top highlight. */
+  .card {
+    @apply rounded-lg border border-[color:var(--border-subtle)] bg-card p-5 shadow-card;
+  }
+
+  /* Inputs / selects — raised inset, --control-md height, violet focus ring. */
+  .input {
+    @apply w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-sm
+      text-t1 placeholder:text-t4 outline-none transition-colors
+      focus:border-[color:var(--border-strong)] focus:shadow-[var(--ring-focus)];
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-t3;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
+      text-sm font-medium transition-colors disabled:cursor-not-allowed
+      disabled:opacity-50;
+  }
+  /* Primary action — prism rose fill, dark warm text. */
+  .btn-primary {
+    @apply btn bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-press;
+  }
+  /* Secondary action — raised fill, hairline border, lifts on hover. */
+  .btn-ghost {
+    @apply btn border border-border bg-surface-raised text-t2 hover:bg-overlay hover:text-t1;
+  }
+
+  /* Status pill base (neutral). Status components layer a token pair on top:
+     subtle bg + saturated text (e.g. bg-info-subtle text-info). */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-pill border border-transparent
+      bg-surface-raised px-2.5 py-0.5 text-xs font-medium text-t3;
+  }
+}

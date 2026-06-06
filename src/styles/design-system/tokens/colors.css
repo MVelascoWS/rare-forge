@@ -1,0 +1,99 @@
+/* ============================================================
+   Rare Forge — Color tokens
+   Dark-first. A warm, plum-tinted near-black canvas refracted by
+   a signature spectral gradient (the "prism"). The prism is the
+   emotional core of the brand: many contributors' work refracted
+   into one finished piece, value split fairly like light.
+   ============================================================ */
+
+:root {
+  /* ---- Ink: warm, plum-tinted neutral scale (dark -> light) ---- */
+  --ink-950: #0a0810;  /* canvas / void            */
+  --ink-900: #0f0c17;  /* deep inset               */
+  --ink-850: #161121;  /* base surface             */
+  --ink-800: #1c1628;  /* raised surface           */
+  --ink-750: #241d32;  /* card                     */
+  --ink-700: #2d2540;  /* overlay / popover        */
+  --ink-650: #372e4d;  /* hairline-strong          */
+  --ink-600: #45395f;  /* divider                  */
+  --ink-500: #564b6e;  /* disabled fill            */
+  --ink-400: #786d92;  /* muted text / icons       */
+  --ink-300: #9b91b4;  /* tertiary text            */
+  --ink-200: #c4bcd6;  /* secondary text           */
+  --ink-100: #e6e1f0;  /* body on dark             */
+  --ink-050: #f7f4fc;  /* strongest text           */
+
+  /* ---- Prism: the signature spectrum (ordered violet -> amber) ---- */
+  --prism-iris:   #7b6cff;  /* violet  */
+  --prism-orchid: #b94ddb;  /* magenta */
+  --prism-rose:   #ff5c8f;  /* rose    */
+  --prism-coral:  #ff7a4d;  /* coral   */
+  --prism-amber:  #ffc24d;  /* amber   */
+  --prism-mint:   #2fd9c4;  /* cool counter — "verified / on-chain" */
+
+  /* ---- Signature gradients ---- */
+  --gradient-prism: linear-gradient(100deg,
+      var(--prism-iris) 0%,
+      var(--prism-orchid) 28%,
+      var(--prism-rose) 52%,
+      var(--prism-coral) 76%,
+      var(--prism-amber) 100%);
+  --gradient-prism-vert: linear-gradient(180deg,
+      var(--prism-iris) 0%, var(--prism-orchid) 30%,
+      var(--prism-rose) 55%, var(--prism-coral) 80%, var(--prism-amber) 100%);
+  --gradient-prism-soft: linear-gradient(100deg,
+      rgba(123,108,255,.18), rgba(185,77,219,.16),
+      rgba(255,92,143,.16), rgba(255,122,77,.16), rgba(255,194,77,.18));  /* @kind color */
+  --gradient-ember: linear-gradient(120deg, var(--prism-rose), var(--prism-coral) 60%, var(--prism-amber));
+  /* aurora wash for hero/empty backgrounds */
+  --gradient-aurora:
+      radial-gradient(120% 90% at 12% -10%, rgba(123,108,255,.28), transparent 55%),
+      radial-gradient(120% 90% at 88% 8%, rgba(255,92,143,.22), transparent 55%),
+      radial-gradient(140% 120% at 60% 120%, rgba(255,194,77,.14), transparent 55%);  /* @kind color */
+
+  /* ---- Brand accent (primary action) ---- */
+  --accent:         var(--prism-rose);
+  --accent-hover:   #ff77a3;
+  --accent-press:   #ed4a7d;
+  --accent-subtle:  rgba(255,92,143,.14);
+  --accent-border:  rgba(255,92,143,.40);
+  --on-accent:      #1a0d14;   /* dark warm text on bright accent */
+
+  /* ---- Verified / on-chain (cool counter-accent) ---- */
+  --verified:        var(--prism-mint);
+  --verified-subtle: rgba(47,217,196,.14);
+  --on-verified:     #04201c;
+
+  /* ---- Semantic status ---- */
+  --success:        #3ddc84;
+  --success-subtle: rgba(61,220,132,.14);
+  --warning:        #ffb84d;
+  --warning-subtle: rgba(255,184,77,.14);
+  --danger:         #ff5a52;
+  --danger-subtle:  rgba(255,90,82,.14);
+  --info:           var(--prism-iris);
+  --info-subtle:    rgba(123,108,255,.14);
+
+  /* ---- Semantic surfaces ---- */
+  --surface-canvas:  var(--ink-950);
+  --surface:         var(--ink-850);
+  --surface-raised:  var(--ink-800);
+  --surface-card:    var(--ink-750);
+  --surface-overlay: var(--ink-700);
+  --surface-inset:   var(--ink-900);
+  --surface-hover:   rgba(255,255,255,.04);
+  --surface-active:  rgba(255,255,255,.07);
+
+  /* ---- Text ---- */
+  --text-1: var(--ink-050);   /* headings / strong   */
+  --text-2: var(--ink-100);   /* body                */
+  --text-3: var(--ink-300);   /* secondary           */
+  --text-4: var(--ink-400);   /* muted / placeholder */
+  --text-on-prism: #160a1e;   /* dark text over prism fills */
+
+  /* ---- Borders / hairlines ---- */
+  --border-subtle: rgba(255,255,255,.06);
+  --border:        rgba(255,255,255,.10);
+  --border-strong: rgba(255,255,255,.16);
+  --border-accent: var(--accent-border);
+}

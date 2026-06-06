@@ -1,0 +1,10 @@
+<svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rare Forge">
+  <g fill="none" stroke-width="7.2" stroke-linecap="round">
+    <path d="M25.05 9.04 A15 15 0 0 1 38.77 26.60" stroke="#7b6cff"></path>
+    <path d="M38.27 28.64 A15 15 0 0 1 22.74 38.95" stroke="#b94ddb"></path>
+    <path d="M20.68 38.63 A15 15 0 0 1 9.40 27.43" stroke="#ff5c8f"></path>
+    <path d="M9.06 25.36 A15 15 0 0 1 12.99 13.81" stroke="#ff7a4d"></path>
+    <path d="M14.52 12.38 A15 15 0 0 1 22.95 9.04" stroke="#ffc24d"></path>
+  </g>
+  <circle cx="24" cy="24" r="2.1" fill="#f7f4fc"></circle>
+</svg>

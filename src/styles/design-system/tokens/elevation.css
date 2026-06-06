@@ -1,0 +1,35 @@
+/* ============================================================
+   Rare Forge — Elevation: shadows, rings & blur
+   On a dark canvas, elevation reads through deep ambient shadow
+   plus a faint top inner-highlight. The spectral "glow" is
+   reserved for the single most important moment on a surface.
+   ============================================================ */
+
+:root {
+  /* ---- Ambient shadows (dark UI) ---- */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-sm: 0 2px 6px -2px rgba(0,0,0,.5);
+  --shadow-md: 0 8px 24px -8px rgba(0,0,0,.55);
+  --shadow-lg: 0 20px 48px -16px rgba(0,0,0,.62);
+  --shadow-xl: 0 32px 72px -24px rgba(0,0,0,.7);
+
+  /* Faint inner top-highlight that makes raised cards "catch light" */
+  --highlight-top: inset 0 1px 0 rgba(255,255,255,.06); /* @kind shadow */
+
+  /* ---- Spectral glow — emphasis only ---- */
+  --glow-accent: 0 0 0 1px rgba(255,92,143,.35), 0 10px 40px -10px rgba(255,92,143,.4);
+  --glow-prism: 0 8px 50px -12px rgba(123,108,255,.45), 0 8px 50px -12px rgba(255,122,77,.35);
+  --glow-verified: 0 0 0 1px rgba(47,217,196,.35), 0 8px 32px -10px rgba(47,217,196,.4);
+
+  /* ---- Focus ring ---- */
+  --ring-focus: 0 0 0 3px rgba(123,108,255,.5);
+  --ring-accent: 0 0 0 3px rgba(255,92,143,.45);
+  --ring-offset-canvas: 0 0 0 2px var(--surface-canvas), 0 0 0 5px rgba(123,108,255,.5);
+
+  /* ---- Glass / blur ---- */
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 28px;
+  --glass-bg: rgba(28,22,40,.72);
+  --glass-border: rgba(255,255,255,.10);
+}

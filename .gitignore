@@ -28,3 +28,6 @@ next-env.d.ts
 
 # rare-cli validation artifacts (generated, may contain addresses)
 validate-artifacts.json
+
+# user-uploaded assets / work covers (runtime content)
+/uploads
