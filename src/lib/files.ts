@@ -1,8 +1,13 @@
 /**
- * Helpers for uploaded-file display. The backend keeps the disk path (for
- * `rare mint --image`); the browser reads files through the served URL
- * (/api/files/<name>). See /api/upload and /api/files.
+ * Helpers for uploaded-file display. Files live in Supabase Storage; the DB
+ * stores the object KEY, and the browser reads them via the bucket's public URL.
+ * (Client-safe module — no Supabase client import, just the public URL shape.)
  */
+
+/** Supabase Storage bucket for uploaded assets (public read). */
+export const ASSET_BUCKET = "assets";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
 const IMAGE_EXT = new Set([
   "png",
@@ -25,14 +30,17 @@ export function isImagePath(path: string | null | undefined): boolean {
   return IMAGE_EXT.has(ext(path));
 }
 
-/** Map an `uploads/<name>` disk path (or an existing URL) to a browser URL. */
-export function servedUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
-  if (path.startsWith("uploads/")) {
-    return "/api/files/" + path.slice("uploads/".length);
-  }
-  if (path.startsWith("/api/files/") || path.startsWith("http")) return path;
-  return null;
+/**
+ * Resolve a stored reference to a browser URL. Accepts either a full URL
+ * (e.g. delivery_ipfs holds the public URL) or a Supabase Storage object key
+ * (e.g. delivery_path / reference_path), which is mapped to the bucket's public
+ * URL. Returns null if there's nothing to show.
+ */
+export function servedUrl(ref: string | null | undefined): string | null {
+  if (!ref) return null;
+  if (ref.startsWith("http://") || ref.startsWith("https://")) return ref;
+  if (!SUPABASE_URL) return null;
+  return `${SUPABASE_URL}/storage/v1/object/public/${ASSET_BUCKET}/${ref}`;
 }
 
 /** Short uppercase type label (e.g. "FBX", "MP3"). */

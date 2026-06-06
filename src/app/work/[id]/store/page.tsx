@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Work, Bounty, Sale } from "@/lib/supabase";
 import { apiGet, apiPost } from "@/lib/api";
-import { useIdentity, truncateAddress } from "@/lib/use-identity";
+import { truncateAddress } from "@/lib/use-identity";
 import { buildRoyaltyRows } from "@/lib/split-preview";
 import { RequireWallet } from "@/components/require-wallet";
 import { Metric } from "@/components/metric";
@@ -24,7 +24,6 @@ export default function StorePage({ params }: { params: { id: string } }) {
 }
 
 function StoreInner({ workId }: { workId: string }) {
-  const { address } = useIdentity();
   const [board, setBoard] = useState<Board | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +86,7 @@ function StoreInner({ workId }: { workId: string }) {
     setBuying(true);
     setActionError(null);
     try {
-      await apiPost("/api/sales/buy", { workId, recipient: address ?? undefined });
+      await apiPost("/api/sales/buy", { workId });
       await loadSales();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Buy failed");
@@ -125,6 +124,7 @@ function StoreInner({ workId }: { workId: string }) {
           >
             Buy copy ↗
           </PendingButton>
+          <span className="text-xs text-t4">Triggers the on-chain split payout.</span>
           {actionError && <span className="text-xs text-danger">{actionError}</span>}
         </div>
       </div>

@@ -1,26 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { uploadToBucket } from "@/lib/storage";
 
 /**
  * POST /api/upload  (multipart/form-data, field "file")
  *
- * Saves one uploaded image to ./uploads/<uuid>-<filename> and returns
- * { path } — a path relative to the project root that the backend process can
- * hand to `rare mint --image` (the smoke tests confirmed relative paths like
- * test-assets/... resolve from the app's cwd).
+ * Uploads one file to Supabase Storage (the `assets` bucket) and returns:
+ *   - path: the object KEY (stored in the DB — delivery_path / reference_path /
+ *           imagePath). At mint time the backend downloads it to a temp file for
+ *           `rare mint --image` (see src/lib/storage.ts downloadToTemp).
+ *   - url:  the public URL the browser uses for previews / downloads.
  *
- * Serves BOTH the artist's asset delivery and the producer's work cover at seal
- * time. Local disk only — no cloud storage (FRONTEND_SPEC "Upload endpoint").
- * The dir must be writable by the app and readable by the rare-cli invocation,
- * which holds here because both run in the same process/host.
+ * Storage is durable across ephemeral hosts (Vercel/Railway), unlike local disk.
+ * The Supabase Storage client is server-only (service key in src/lib/supabase.ts).
  */
-
-// Route handlers default to the Node.js runtime; make it explicit since we use fs.
 export const runtime = "nodejs";
 
-const UPLOAD_DIR = "uploads"; // relative to process.cwd()
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — game-dev assets can be large
 
 export async function POST(req: NextRequest) {
@@ -38,7 +32,6 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing 'file' field" }, { status: 400 });
   }
-
   if (file.size === 0) {
     return NextResponse.json({ error: "File is empty" }, { status: 400 });
   }
@@ -49,36 +42,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Any file type is accepted (#3): images become NFT media directly; other
-  // assets (FBX, audio, …) are stored + served, with an image used for the mint.
-
-  // Sanitize the original name to a safe basename; prefix a uuid for uniqueness.
-  const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const fileName = `${randomUUID()}-${safeName}`;
-  const relPath = `${UPLOAD_DIR}/${fileName}`;
-  const absDir = path.join(process.cwd(), UPLOAD_DIR);
-  const absPath = path.join(absDir, fileName);
-
+  // Any file type is accepted: images become NFT media directly; other assets
+  // (FBX, audio, …) are stored + served, with an image used for the mint.
   try {
-    await mkdir(absDir, { recursive: true });
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(absPath, bytes);
+    const { key, publicUrl } = await uploadToBucket(file);
+    return NextResponse.json({
+      path: key,
+      url: publicUrl,
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      isImage: file.type.startsWith("image/"),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
-    return NextResponse.json(
-      { error: `Failed to save upload: ${message}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: `Failed to store upload: ${message}` }, { status: 500 });
   }
-
-  // `path` (disk, relative) is what callers pass as deliveryPath / imagePath to
-  // the backend (rare --image). `url` is what the browser uses to preview /
-  // download the file (served by /api/files).
-  return NextResponse.json({
-    path: relPath,
-    url: `/api/files/${fileName}`,
-    filename: safeName,
-    contentType: file.type || "application/octet-stream",
-    isImage: file.type.startsWith("image/"),
-  });
 }

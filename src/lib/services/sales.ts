@@ -17,7 +17,6 @@ import type { ServiceResult } from "./bounties";
 export async function buyCopy(opts: {
   workId: string;
   quantity?: number;
-  recipient?: string;
 }): Promise<ServiceResult<{ txHash: string; tokenIds: string[]; sale: Sale }>> {
   const { data: work, error: wErr } = await supabase
     .from("works")
@@ -31,10 +30,13 @@ export async function buyCopy(opts: {
   }
 
   // ONCHAIN: mint a copy from the release (triggers the split payout).
+  // NOTE: RareMinter's direct-sale mint always mints to the signer (the backend
+  // wallet) — it does NOT accept a separate recipient. The point of the demo is
+  // the on-chain split payout, which fires regardless. Buyer-signed purchases
+  // (copy goes to the buyer) are a roadmap item that needs browser-side signing.
   const mint = await mintCopy({
     contract: w.work_contract,
     quantity: opts.quantity ?? 1,
-    recipient: opts.recipient,
   });
   if (!mint.ok || !mint.data) {
     return { ok: false, error: `Copy mint failed: ${mint.error ?? "unknown"}` };

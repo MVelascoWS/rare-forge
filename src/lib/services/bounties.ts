@@ -1,5 +1,6 @@
 import { supabase, type Bounty, type ClaimedByKind } from "../supabase";
 import { mintAsset } from "../rare";
+import { downloadToTemp, removeTemp } from "../storage";
 
 /**
  * BOUNTY SERVICE LAYER
@@ -150,37 +151,59 @@ export async function approveAndMint(opts: {
     .update({ status: "approved", updated_at: new Date().toISOString() })
     .eq("id", opts.bountyId);
 
-  // ONCHAIN: mint the asset to the creator (creator = royalty receiver).
-  const mint = await mintAsset({
-    contract: opts.assetContract,
-    name: b.title,
-    description: `${b.role} — Rare Forge asset`,
-    imagePath: b.delivery_path,
-    creatorAddress: b.claimed_by,
-    attributes: [{ trait: "role", value: b.role }],
-  });
-
-  if (!mint.ok || !mint.data) {
-    // Roll back to 'delivered' so it can be retried.
+  // The deliverable lives in Supabase Storage; `rare --image` needs a LOCAL
+  // path. Download it to a temp file, mint from that, and always clean up.
+  let tempImagePath: string | null = null;
+  try {
+    tempImagePath = await downloadToTemp(b.delivery_path);
+  } catch (e) {
+    // Couldn't fetch the asset → nothing minted. Roll back so it can be retried.
     await supabase
       .from("bounties")
       .update({ status: "delivered", updated_at: new Date().toISOString() })
       .eq("id", opts.bountyId);
-    return { ok: false, error: `Mint failed: ${mint.error ?? "unknown error"}` };
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not fetch the delivered asset from storage",
+    };
   }
 
-  const { data: updated, error: updErr } = await supabase
-    .from("bounties")
-    .update({
-      status: "minted",
-      token_id: mint.data.tokenId,
-      tx_hash: mint.data.txHash,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", opts.bountyId)
-    .select()
-    .single();
+  try {
+    // ONCHAIN: mint the asset to the creator (creator = royalty receiver).
+    const mint = await mintAsset({
+      contract: opts.assetContract,
+      name: b.title,
+      description: `${b.role} — Rare Forge asset`,
+      imagePath: tempImagePath,
+      creatorAddress: b.claimed_by,
+      attributes: [{ trait: "role", value: b.role }],
+    });
 
-  if (updErr) return { ok: false, error: "Minted on-chain but failed to record (check tx)" };
-  return { ok: true, data: updated as Bounty };
+    if (!mint.ok || !mint.data) {
+      // Roll back to 'delivered' so it can be retried.
+      await supabase
+        .from("bounties")
+        .update({ status: "delivered", updated_at: new Date().toISOString() })
+        .eq("id", opts.bountyId);
+      return { ok: false, error: `Mint failed: ${mint.error ?? "unknown error"}` };
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from("bounties")
+      .update({
+        status: "minted",
+        token_id: mint.data.tokenId,
+        tx_hash: mint.data.txHash,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", opts.bountyId)
+      .select()
+      .single();
+
+    if (updErr) return { ok: false, error: "Minted on-chain but failed to record (check tx)" };
+    return { ok: true, data: updated as Bounty };
+  } finally {
+    // Always remove the temp file, even if the mint threw or failed.
+    await removeTemp(tempImagePath);
+  }
 }
